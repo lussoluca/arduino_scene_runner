@@ -1,0 +1,25 @@
+# Example scene: LEDs build up, music kicks in, servo moves, all stops.
+name: Demo Scene
+end: 14  # hard stop after 14s (safety; remove to run until cues finish)
+
+cues:
+  # LED on pin 13 starts blinking slowly right away.
+  - { at: 0,  action: blink, pin: 13, interval: 0.5 }
+
+  # A second LED on pin 12 joins, blinking faster.
+  - { at: 2,  action: blink, pin: 12, interval: 0.2 }
+
+  # Music starts.
+  - { at: 4,  action: audio, file: /System/Library/Sounds/Submarine.aiff }
+
+  # Servo on pin 9 sweeps from current position to 180 over 2 seconds.
+  - { at: 5,  action: servo, pin: 9, angle: 180, duration: 2 }
+
+  # Servo sweeps back to 0 over 2 seconds.
+  - { at: 8,  action: servo, pin: 9, angle: 0, duration: 2 }
+
+  # Stop the slow LED.
+  - { at: 11, action: stop, pin: 13 }
+
+  # Everything stops: LEDs off, audio off, behaviors cleared.
+  - { at: 13, action: stop_all }

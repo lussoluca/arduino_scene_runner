@@ -1,0 +1,19 @@
+# Scene that pauses and waits for a button press on pin 2.
+# Wiring: button between pin 2 and 5V, with a pull-down resistor to GND
+# (idle = LOW, pressed = HIGH). Use `to: low` instead for pull-up wiring.
+name: Button Demo
+
+cues:
+  # Blink while idle, signalling "ready".
+  - { at: 0, action: blink, pin: 13, interval: 0.3 }
+
+  # Freeze here until the button on pin 2 is pressed.
+  # The blink above also freezes; everything resumes on press.
+  - { at: 1, action: wait, pin: 2, to: high }
+
+  # After the press: music + servo move.
+  - { at: 1, action: stop, pin: 13 }
+  - { at: 1, action: audio, file: /System/Library/Sounds/Submarine.aiff }
+  - { at: 1, action: servo, pin: 9, angle: 180, duration: 2 }
+  - { at: 3, action: servo, pin: 9, angle: 0, duration: 2 }
+  - { at: 6, action: stop_all }

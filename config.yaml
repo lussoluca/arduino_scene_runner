@@ -1,0 +1,4 @@
+# Hardware configuration shared by all scripts.
+# Override at runtime with the ARDUINO_PORT environment variable,
+# or by passing a port as the last CLI argument.
+port: /dev/cu.usbmodem213301

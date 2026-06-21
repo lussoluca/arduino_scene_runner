@@ -1,0 +1,29 @@
+# Interactive scene: a base loop runs continuously; pressing the button on
+# pin 2 changes the behaviour (new LEDs, different music, servo move) WITHOUT
+# stopping the base loop.
+name: Interactive Demo
+
+cues:
+  # --- base ambience, runs from the start and keeps going ---
+  - { at: 0, action: blink, pin: 13, interval: 0.5 }
+  - { at: 0, action: audio, file: /Users/lussoluca/Sites/Personal/vdb2026/sounds/516905__rakkarage__error.wav, loop: true }
+
+triggers:
+  # Press pin 2 -> escalate: faster second LED, swap the music, sweep servo.
+  # The pin-13 blink above keeps running through all of this.
+  - name: escalate
+    pin: 3
+    to: high
+    once: true
+    do:
+      - { at: 0, action: blink, pin: 12, interval: 0.15 }
+      - { at: 0, action: stop_audio }
+      # - { at: 0,   action: audio, file: /Users/lussoluca/Sites/Personal/vdb2026/sounds/859449__coghezzi__alien-ship-alarm-escape-detected.wav, replace: true }
+      - { at: 0.2, action: servo, pin: 9, angle: 180, duration: 1 }
+      - { at: 1.5, action: servo, pin: 9, angle: 0, duration: 1 }
+  - name: escalate2
+    pin: 2
+    to: high
+    once: true
+    do:
+      - { at: 0, action: audio, file: /Users/lussoluca/Sites/Personal/vdb2026/sounds/859449__coghezzi__alien-ship-alarm-escape-detected.wav, replace: true }
