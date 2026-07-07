@@ -70,22 +70,42 @@ cues:
 
 ### Actions
 
-| Action       | Parameters                             | Effect                                                                                                                                                        |
-| ------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `on`         | `pin`                                  | Drive a digital pin HIGH.                                                                                                                                     |
-| `off`        | `pin`                                  | Drive a digital pin LOW.                                                                                                                                      |
-| `blink`      | `pin`, `interval`                      | Toggle the pin every `interval` seconds. Runs until stopped.                                                                                                  |
-| `servo`      | `pin`, `angle`, `duration?`            | Move a servo to `angle` (0–180). With `duration`, sweep over that many seconds; without it, jump instantly.                                                   |
-| `audio`      | `file`, `loop?`, `replace?`, `volume?` | Play a sound (non-blocking). `loop: true` repeats it gaplessly. `replace: true` stops any current audio first (use to change the music). `volume` is 0.0–1.0. |
-| `stop_audio` | —                                      | Stop all audio; leave LEDs and servos as they are.                                                                                                            |
-| `stop`       | `pin`                                  | Stop a `blink` or `servo` sweep on that pin.                                                                                                                  |
-| `stop_all`   | —                                      | Stop everything: behaviors cleared, audio stopped, LEDs off.                                                                                                  |
-| `wait`       | `pin`, `to?`                           | Freeze the **whole** scene until a button edge (see below).                                                                                                   |
+| Action       | Parameters                                                    | Effect                                                                                                                                                                                                |
+| ------------ | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `on`         | `pin`                                                         | Drive a digital pin HIGH.                                                                                                                                                                             |
+| `off`        | `pin`                                                         | Drive a digital pin LOW.                                                                                                                                                                              |
+| `blink`      | `pin`, `interval`                                             | Toggle the pin every `interval` seconds. Runs until stopped.                                                                                                                                          |
+| `servo`      | `pin`, `angle`, `duration?`                                   | Move a servo to `angle` (0–180). With `duration`, sweep over that many seconds; without it, jump instantly.                                                                                           |
+| `audio`      | `file`, `loop?`, `replace?`, `volume?`                        | Play a sound (non-blocking). `loop: true` repeats it gaplessly. `replace: true` stops any current audio first (use to change the music). `volume` is 0.0–1.0.                                         |
+| `stop_audio` | —                                                             | Stop all audio; leave LEDs and servos as they are.                                                                                                                                                    |
+| `video`      | `file`, `loop?`, `replace?`, `volume?`, `backend?`, `screen?` | Play a video fullscreen (non-blocking). `loop: true` repeats it. `replace: true` closes any current video first. `volume` is 0.0–1.0. `backend` forces `mpv` or `ffplay`. `screen` picks the display. |
+| `stop_video` | —                                                             | Close all video; leave audio, LEDs, and servos as they are.                                                                                                                                           |
+| `stop`       | `pin`                                                         | Stop a `blink` or `servo` sweep on that pin.                                                                                                                                                          |
+| `stop_all`   | —                                                             | Stop everything: behaviors cleared, audio and video stopped, LEDs off.                                                                                                                                |
+| `wait`       | `pin`, `to?`                                                  | Freeze the **whole** scene until a button edge (see below).                                                                                                                                           |
 
 `blink` and `servo` (with `duration`) are _continuous_: they keep running on a
 background tick after the cue fires. Everything else is instantaneous.
 
 Audio formats: WAV, MP3, FLAC, OGG, AIFF. WAV has the lowest start latency.
+
+Video plays fullscreen through `mpv` (preferred) or `ffplay`, whichever is
+installed — any format they decode works (MP4, MOV, MKV, …). Install one with
+`brew install mpv` or `brew install ffmpeg`. Force a backend per cue with
+`backend: mpv`, or globally with the `VIDEO_BACKEND` environment variable.
+On a multi-monitor setup, `screen` picks the display for fullscreen: either an
+index (`screen: 1`, 0 = first) or a display name (`screen: DELL U2715H` — names
+as shown by `system_profiler SPDisplaysDataType`). A name survives display
+re-ordering, so prefer it for installations. List indices and names as mpv
+sees them with:
+
+```bash
+python video_player.py --list-screens
+```
+
+(each screen flashes black for about a second while probing). Screen selection
+is reliable with mpv; with ffplay only an index works, as a best-effort SDL
+hint. A `wait` pause freezes video along with audio and motion.
 
 ### When does a scene end?
 
@@ -182,3 +202,4 @@ with ArduinoController("/dev/cu.usbmodem213301") as board:
 | `scene.yaml`             | A basic timeline: LEDs, music, servo sweep, stop. |
 | `scene_button.yaml`      | `wait` — freeze until a button press.             |
 | `scene_interactive.yaml` | `triggers` — press to change the running scene.   |
+| `scene_video.yaml`       | `video` — fullscreen clips with loop and replace. |

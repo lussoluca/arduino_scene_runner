@@ -30,6 +30,14 @@ Actions
                                         (change the music); with loop, repeat
                                         the track until stopped
     stop_audio                          stop all audio, leave LEDs/servos
+    video     file [replace: true]     play video fullscreen (non-blocking);
+              [loop: true]              with replace, stop current video first;
+              [backend: mpv|ffplay]     with loop, repeat until stopped;
+              [screen: N]               backend forces the player (default:
+                                        mpv if installed, else ffplay);
+                                        screen picks the display (0 = first;
+                                        reliable with mpv only)
+    stop_video                          close all video, leave audio/LEDs
     wait      pin [to: high|low]        freeze the WHOLE scene until the input
                                         pin transitions to `to` (default high);
                                         audio + motion pause and resume together
@@ -70,6 +78,7 @@ import yaml
 from arduino_controller import ArduinoController
 from audio_player import AudioPlayer
 from config import default_port
+from video_player import VideoPlayer
 
 TICK = 0.02  # seconds between engine updates
 
@@ -133,6 +142,7 @@ class SceneRunner:
     _sweeps: dict[int, Sweep] = field(default_factory=dict)
     _servo_angle: dict[int, float] = field(default_factory=dict)
     _players: list[AudioPlayer] = field(default_factory=list)
+    _videos: list[VideoPlayer] = field(default_factory=list)
     _wait: WaitState | None = None
     _pending: list[dict] = field(default_factory=list)  # cues with abs "_t"
 
@@ -189,11 +199,29 @@ class SceneRunner:
         elif action == "audio":
             if cue.get("replace"):  # swap music: stop any current playback
                 self._stop_audio()
-            player = AudioPlayer(cue["file"], loop=bool(cue.get("loop")))
+            player = AudioPlayer(
+                cue["file"],
+                loop=bool(cue.get("loop")),
+                volume=float(cue.get("volume", 1.0)),
+            )
             player.play()
             self._players.append(player)
         elif action == "stop_audio":
             self._stop_audio()
+        elif action == "video":
+            if cue.get("replace"):  # swap video: close any current playback
+                self._stop_video()
+            video = VideoPlayer(
+                cue["file"],
+                loop=bool(cue.get("loop")),
+                volume=float(cue.get("volume", 1.0)),
+                backend=cue.get("backend"),
+                screen=cue.get("screen"),
+            )
+            video.play()
+            self._videos.append(video)
+        elif action == "stop_video":
+            self._stop_video()
         elif action == "stop":
             self._stop_pin(cue["pin"])
         elif action == "stop_all":
@@ -254,16 +282,22 @@ class SceneRunner:
             p.stop()
         self._players.clear()
 
+    def _stop_video(self) -> None:
+        for v in self._videos:
+            v.stop()
+        self._videos.clear()
+
     def _stop_all(self) -> None:
         for b in self._blinkers.values():
             self.board.pin_off(b.pin)
         self._blinkers.clear()
         self._sweeps.clear()
         self._stop_audio()
+        self._stop_video()
 
     def _busy(self) -> bool:
         return bool(self._blinkers or self._sweeps) or any(
-            p.is_playing() for p in self._players
+            p.is_playing() for p in self._players + self._videos
         )
 
     # --- input edges ---------------------------------------------------
@@ -306,11 +340,11 @@ class SceneRunner:
         return any(t.armed for t in self.triggers)
 
     def _pause_audio(self) -> None:
-        for p in self._players:
+        for p in self._players + self._videos:
             p.pause()
 
     def _resume_audio(self) -> None:
-        for p in self._players:
+        for p in self._players + self._videos:
             p.resume()
 
     # --- main loop -----------------------------------------------------
