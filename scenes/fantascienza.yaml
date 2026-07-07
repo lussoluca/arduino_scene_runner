@@ -1,0 +1,29 @@
+# Scene with fullscreen video: LEDs set the mood, a looping video plays,
+# then a second clip replaces it and everything winds down together.
+# Video needs ffplay (`brew install ffmpeg`). Point `file` at your own clips.
+name: Video Demo
+
+cues:
+  # LED on pin 13 blinks as a "warming up" indicator.
+  - { at: 0, action: blink, pin: 13, interval: 0.4 }
+
+  - { at: 0, action: audio, file: /Users/lussoluca/Sites/Personal/vdb2026/sounds/516905__rakkarage__error.wav, loop: true }
+  - { at: 0, action: video, file: video/0_Glitch_Glitch_Effect_3840x2160.mp4, loop: true, volume: 0.8, screen: Sidecar Display (AirPlay) }
+
+triggers:
+  # Press pin 2 -> escalate: faster second LED, swap the music, sweep servo.
+  # The pin-13 blink above keeps running through all of this.
+  - name: escalate
+    pin: 3
+    to: high
+    once: true
+    do:
+      - { at: 0, action: stop_audio }
+      - { at: 0, action: audio, file: sounds/859449__coghezzi__alien-ship-alarm-escape-detected.wav, loop: true }
+      - { at: 0, action: video, file: video/0_Neon_Number_3840x2160.mp4, loop: true, screen: Sidecar Display (AirPlay) }
+  - name: escalate2
+    pin: 2
+    to: high
+    once: true
+    do:
+      - { at: 0, action: stop_all }
