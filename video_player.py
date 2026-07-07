@@ -62,14 +62,14 @@ def default_backend() -> str:
 def _probe_screen(index: int) -> str:
     """Open a black fullscreen mpv window on `index` and return the display
     name it actually landed on (via the `display-names` IPC property)."""
-    sock_path = os.path.join(tempfile.mkdtemp(), "mpv.sock")
+    # Socket path kept short: macOS limits unix socket paths to 104 bytes,
+    # and the default TMPDIR (/var/folders/…) can push past that.
+    sock_path = os.path.join(tempfile.mkdtemp(prefix="mpv-", dir="/tmp"), "s")
     proc = subprocess.Popen(
         [
             "mpv",
             "--fs",
             f"--fs-screen={index}",
-            "--no-terminal",
-            "--really-quiet",
             "--no-input-default-bindings",
             f"--input-ipc-server={sock_path}",
             "--loop-file=inf",
@@ -77,8 +77,10 @@ def _probe_screen(index: int) -> str:
             # exactly like normal playback windows.
             "av://lavfi:color=c=black:d=1",
         ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        # Terminal output stays enabled and lands in these pipes, so a
+        # failing mpv can be quoted in the error message.
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     try:
         sock = socket.socket(socket.AF_UNIX)
@@ -87,9 +89,19 @@ def _probe_screen(index: int) -> str:
                 sock.connect(sock_path)
                 break
             except (FileNotFoundError, ConnectionRefusedError):
+                if proc.poll() is not None:  # mpv died before serving IPC
+                    out, err = proc.communicate()
+                    said = (err + out).decode(errors="replace").strip()
+                    raise RuntimeError(
+                        f"mpv exited with code {proc.returncode} before its IPC "
+                        f"socket appeared. mpv said:\n{said or '(nothing)'}"
+                    )
                 time.sleep(0.1)
         else:
-            raise RuntimeError("mpv IPC socket never appeared")
+            raise RuntimeError(
+                "mpv is running but its IPC socket never appeared at "
+                f"{sock_path} — mpv version too old for --input-ipc-server?"
+            )
         time.sleep(0.5)  # let the window settle on the target screen
         sock.sendall(b'{"command": ["get_property", "display-names"]}\n')
         for line in sock.makefile():
@@ -107,7 +119,7 @@ def _probe_screen(index: int) -> str:
         return name
     finally:
         proc.terminate()
-        proc.wait()
+        proc.communicate()  # drain the pipes while reaping
 
 
 def list_screens() -> list[str]:
