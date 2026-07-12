@@ -23,14 +23,17 @@ Actions
     on        pin                       digital HIGH
     off       pin                       digital LOW
     blink     pin interval              toggle pin every `interval` seconds
+    morse     pin message [unit]        blink pin as Morse code of `message`
+              [loop: true]              (unit = seconds per dot, default 0.2);
+                                        with loop, repeat until stopped
     servo     pin angle [duration]      move servo; sweep over `duration`
                                         seconds if given, else jump
-    audio     file [replace: true]     play sound file (non-blocking); with
+    audio     file [replace: true]      play sound file (non-blocking); with
               [loop: true]              replace, stop current audio first
                                         (change the music); with loop, repeat
                                         the track until stopped
     stop_audio                          stop all audio, leave LEDs/servos
-    video     file [replace: true]     play video fullscreen (non-blocking);
+    video     file [replace: true]      play video fullscreen (non-blocking);
               [loop: true]              with replace, stop current video first;
               [backend: mpv|ffplay]     with loop, repeat until stopped;
               [screen: N]               backend forces the player (default:
@@ -82,6 +85,47 @@ from video_player import VideoPlayer
 
 TICK = 0.02  # seconds between engine updates
 
+# International Morse code. Space in a message separates words.
+MORSE_CODE = {
+    "A": ".-", "B": "-...", "C": "-.-.", "D": "-..", "E": ".",
+    "F": "..-.", "G": "--.", "H": "....", "I": "..", "J": ".---",
+    "K": "-.-", "L": ".-..", "M": "--", "N": "-.", "O": "---",
+    "P": ".--.", "Q": "--.-", "R": ".-.", "S": "...", "T": "-",
+    "U": "..-", "V": "...-", "W": ".--", "X": "-..-", "Y": "-.--",
+    "Z": "--..",
+    "0": "-----", "1": ".----", "2": "..---", "3": "...--", "4": "....-",
+    "5": ".....", "6": "-....", "7": "--...", "8": "---..", "9": "----.",
+    ".": ".-.-.-", ",": "--..--", "?": "..--..", "'": ".----.",
+    "!": "-.-.--", "/": "-..-.", "(": "-.--.", ")": "-.--.-",
+    "&": ".-...", ":": "---...", ";": "-.-.-.", "=": "-...-",
+    "+": ".-.-.", "-": "-....-", "_": "..--.-", '"': ".-..-.",
+    "$": "...-..-", "@": ".--.-.",
+}
+
+
+def morse_segments(message: str, unit: float) -> list[tuple[bool, float]]:
+    """Turn a text message into (pin_state, seconds) on/off segments.
+
+    Uses standard Morse timing in `unit`-second units: dot = 1, dash = 3,
+    intra-character gap = 1, inter-character gap = 3, word gap = 7.
+    Unknown characters are skipped.
+    """
+    segments: list[tuple[bool, float]] = []
+    words = message.upper().split()
+    for wi, word in enumerate(words):
+        chars = [c for c in word if c in MORSE_CODE]
+        for ci, ch in enumerate(chars):
+            code = MORSE_CODE[ch]
+            for si, sym in enumerate(code):
+                segments.append((True, (3 if sym == "-" else 1) * unit))
+                if si != len(code) - 1:
+                    segments.append((False, unit))  # intra-character gap
+            if ci != len(chars) - 1:
+                segments.append((False, 3 * unit))  # inter-character gap
+        if wi != len(words) - 1:
+            segments.append((False, 7 * unit))  # word gap
+    return segments
+
 
 @dataclass
 class Blinker:
@@ -89,6 +133,16 @@ class Blinker:
     interval: float
     state: bool = False
     next_toggle: float = 0.0
+
+
+@dataclass
+class Morse:
+    pin: int
+    segments: list[tuple[bool, float]]
+    loop: bool = False
+    index: int = 0
+    next_change: float = 0.0
+    started: bool = False
 
 
 @dataclass
@@ -139,6 +193,7 @@ class SceneRunner:
     debug: bool = True
     triggers: list[Trigger] = field(default_factory=list)
     _blinkers: dict[int, Blinker] = field(default_factory=dict)
+    _morse: dict[int, Morse] = field(default_factory=dict)
     _sweeps: dict[int, Sweep] = field(default_factory=dict)
     _servo_angle: dict[int, float] = field(default_factory=dict)
     _players: list[AudioPlayer] = field(default_factory=list)
@@ -191,8 +246,19 @@ class SceneRunner:
             self._stop_pin(cue["pin"])
             self.board.pin_off(cue["pin"])
         elif action == "blink":
+            self._stop_pin(cue["pin"])
             self._blinkers[cue["pin"]] = Blinker(
                 pin=cue["pin"], interval=cue["interval"], next_toggle=now
+            )
+        elif action == "morse":
+            self._stop_pin(cue["pin"])
+            unit = float(cue.get("unit", 0.2))
+            loop = bool(cue.get("loop"))
+            segments = morse_segments(str(cue["message"]), unit)
+            if loop and segments:
+                segments.append((False, 7 * unit))  # word gap before repeat
+            self._morse[cue["pin"]] = Morse(
+                pin=cue["pin"], segments=segments, loop=loop
             )
         elif action == "servo":
             self._start_servo(cue, now)
@@ -258,6 +324,33 @@ class SceneRunner:
                 self.board.set_pin(b.pin, b.state)
                 b.next_toggle = now + b.interval
 
+    def _update_morse(self, now: float) -> None:
+        done = []
+        for pin, m in self._morse.items():
+            if not m.segments:
+                done.append(pin)
+                continue
+            if not m.started:
+                m.started = True
+                state, dur = m.segments[0]
+                self.board.set_pin(pin, state)
+                m.next_change = now + dur
+                continue
+            if now < m.next_change:
+                continue
+            m.index += 1
+            if m.index >= len(m.segments):
+                if not m.loop:
+                    self.board.pin_off(pin)
+                    done.append(pin)
+                    continue
+                m.index = 0
+            state, dur = m.segments[m.index]
+            self.board.set_pin(pin, state)
+            m.next_change = now + dur
+        for pin in done:
+            self._morse.pop(pin, None)
+
     def _update_sweeps(self, now: float) -> None:
         done = []
         for pin, s in self._sweeps.items():
@@ -275,6 +368,7 @@ class SceneRunner:
 
     def _stop_pin(self, pin: int) -> None:
         self._blinkers.pop(pin, None)
+        self._morse.pop(pin, None)
         self._sweeps.pop(pin, None)
 
     def _stop_audio(self) -> None:
@@ -290,13 +384,16 @@ class SceneRunner:
     def _stop_all(self) -> None:
         for b in self._blinkers.values():
             self.board.pin_off(b.pin)
+        for m in self._morse.values():
+            self.board.pin_off(m.pin)
         self._blinkers.clear()
+        self._morse.clear()
         self._sweeps.clear()
         self._stop_audio()
         self._stop_video()
 
     def _busy(self) -> bool:
-        return bool(self._blinkers or self._sweeps) or any(
+        return bool(self._blinkers or self._morse or self._sweeps) or any(
             p.is_playing() for p in self._players + self._videos
         )
 
@@ -393,6 +490,7 @@ class SceneRunner:
                     break
 
             self._update_blinkers(now)
+            self._update_morse(now)
             self._update_sweeps(now)
 
             if self._wait is None:

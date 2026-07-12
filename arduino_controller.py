@@ -63,11 +63,14 @@ class ArduinoController:
     def setup_input(self, pin: int) -> Pin:
         """Configure (caching) a digital-input pin and start reporting.
 
+        The pin's internal pull-up resistor is enabled, so it idles HIGH and
+        reads LOW while a button wired to ground is pressed.
+
         pyfirmata2 is callback-driven, so the latest value is cached as it
         arrives and exposed via read_digital().
         """
         if pin not in self._input:
-            p = self.board.get_pin(f"d:{pin}:i")
+            p = self.board.get_pin(f"d:{pin}:u")
             p.register_callback(lambda value, _pin=pin: self._on_input(_pin, value))
             p.enable_reporting()
             self._input[pin] = p
