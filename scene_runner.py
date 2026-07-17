@@ -80,7 +80,8 @@ import yaml
 
 from arduino_controller import ArduinoController
 from audio_player import AudioPlayer
-from config import default_port
+from config import default_port, default_rfid_port
+from rfid_reader import RfidReader, normalize_uid
 from video_player import VideoPlayer
 
 TICK = 0.02  # seconds between engine updates
@@ -166,19 +167,24 @@ class WaitState:
 
 @dataclass
 class Trigger:
-    """A button-press handler that injects cues while the scene keeps running.
+    """A press/scan handler that injects cues while the scene keeps running.
 
-    Unlike `wait`, a trigger does NOT freeze the timeline. On the configured
-    edge it schedules its `do` cues (their `at` is an offset from the press).
+    Unlike `wait`, a trigger does NOT freeze the timeline. On its edge it
+    schedules its `do` cues (their `at` is an offset from the press).
+
+    A trigger watches either a button (`pin` + `target` level) or an RFID card
+    (`uid`): a uid trigger fires when a card with that UID is presented to the
+    reader, having been absent or different before.
     """
 
-    pin: int
-    target: bool                 # level that fires it (True = HIGH)
-    do: list[dict]               # cues to schedule on press
-    once: bool = True            # fire only the first press, or re-arm
+    do: list[dict]               # cues to schedule on the edge
+    pin: int | None = None       # button pin, or None for a uid trigger
+    target: bool = True          # level that fires it (True = HIGH)
+    uid: str | None = None       # normalized card UID, or None for a button
+    once: bool = True            # fire only the first time, or re-arm
     name: str = ""
     fired: bool = False
-    seen_opposite: bool = False  # require a transition, not a held level
+    seen_opposite: bool = False  # require a transition, not a held level/card
 
     @property
     def armed(self) -> bool:
@@ -192,6 +198,7 @@ class SceneRunner:
     end: float | None = None
     debug: bool = True
     triggers: list[Trigger] = field(default_factory=list)
+    reader: "RfidReader | None" = None  # ID-12 reader, for uid triggers
     _blinkers: dict[int, Blinker] = field(default_factory=dict)
     _morse: dict[int, Morse] = field(default_factory=dict)
     _sweeps: dict[int, Sweep] = field(default_factory=dict)
@@ -206,18 +213,29 @@ class SceneRunner:
         with open(path) as fh:
             scene = yaml.safe_load(fh)
         cues = sorted(scene.get("cues", []), key=lambda c: c["at"])
-        triggers = [
-            Trigger(
-                pin=t["pin"],
-                target=str(t.get("to", "high")).lower() != "low",
-                do=sorted(t.get("do", []), key=lambda c: c["at"]),
-                once=t.get("once", True),
-                name=t.get("name", f"pin{t['pin']}"),
-            )
-            for t in scene.get("triggers", [])
-        ]
+        triggers = [cls._make_trigger(t) for t in scene.get("triggers", [])]
         return cls(
             board=board, cues=cues, end=scene.get("end"), triggers=triggers
+        )
+
+    @staticmethod
+    def _make_trigger(t: dict) -> Trigger:
+        """Build a Trigger from a YAML entry (button `pin` or RFID `uid`)."""
+        do = sorted(t.get("do", []), key=lambda c: c["at"])
+        once = t.get("once", True)
+        if t.get("uid") is not None:
+            uid = normalize_uid(str(t["uid"]))
+            return Trigger(
+                do=do, uid=uid, once=once, name=t.get("name", f"uid:{uid}")
+            )
+        if t.get("pin") is None:
+            raise ValueError("a trigger needs either a 'pin' or a 'uid'")
+        return Trigger(
+            do=do,
+            pin=t["pin"],
+            target=str(t.get("to", "high")).lower() != "low",
+            once=once,
+            name=t.get("name", f"pin{t['pin']}"),
         )
 
     # --- debug logging -------------------------------------------------
@@ -237,8 +255,11 @@ class SceneRunner:
     # --- cue dispatch --------------------------------------------------
 
     def _fire(self, cue: dict, now: float) -> None:
-        self._log(now, self._fmt_cue(cue))
         action = cue["action"]
+        # YAML parses bare `on`/`off` as booleans; map them back to actions.
+        if isinstance(action, bool):
+            action = cue["action"] = "on" if action else "off"
+        self._log(now, self._fmt_cue(cue))
         if action == "on":
             self._stop_pin(cue["pin"])
             self.board.pin_on(cue["pin"])
@@ -411,20 +432,42 @@ class SceneRunner:
             return False
         return value == target
 
+    @staticmethod
+    def _uid_edge(current, target: str, holder) -> bool:
+        """True when `current` becomes `target` after being absent/different.
+
+        Mirrors `_edge` for cards: an empty reader (None) or a different UID
+        counts as the opposite state, so a card left on the reader fires once,
+        not every tick."""
+        if not holder.seen_opposite:
+            if current != target:
+                holder.seen_opposite = True
+            return False
+        return current == target
+
     def _wait_satisfied(self) -> bool:
         w = self._wait
         assert w is not None
         return self._edge(self.board.read_digital(w.pin), w.target, w)
 
+    def _trigger_hit(self, t: Trigger) -> bool:
+        """Whether trigger `t` fires this tick, by card UID or button edge."""
+        if t.uid is not None:
+            current = self.reader.current_uid() if self.reader else None
+            return self._uid_edge(current, t.uid, t)
+        assert t.pin is not None  # guaranteed by _make_trigger
+        return self._edge(self.board.read_digital(t.pin), t.target, t)
+
     def _poll_triggers(self, now: float) -> None:
-        """Fire any armed trigger whose pin just hit its edge (non-blocking)."""
+        """Fire any armed trigger that just hit its edge (non-blocking)."""
         for t in self.triggers:
             if not t.armed:
                 continue
-            if self._edge(self.board.read_digital(t.pin), t.target, t):
+            if self._trigger_hit(t):
                 t.fired = True
-                t.seen_opposite = False  # re-arm for the next press
-                self._log(now, f"TRIGGER   {t.name} pin={t.pin} +{len(t.do)} cues")
+                t.seen_opposite = False  # re-arm for the next press/scan
+                source = f"uid={t.uid}" if t.uid is not None else f"pin={t.pin}"
+                self._log(now, f"TRIGGER   {t.name} {source} +{len(t.do)} cues")
                 self._schedule(t.do, now)
 
     def _schedule(self, cues: list[dict], base_t: float) -> None:
@@ -450,7 +493,12 @@ class SceneRunner:
         n_trig = len(self.triggers)
         self._log(0.0, f"scene start ({len(self.cues)} cues, {n_trig} triggers)")
         for t in self.triggers:
-            self.board.setup_input(t.pin)
+            if t.pin is not None:
+                self.board.setup_input(t.pin)
+        if any(t.uid is not None for t in self.triggers) and self.reader is None:
+            raise RuntimeError(
+                "scene has RFID (uid) triggers but no reader is attached"
+            )
         self._pending = sorted(
             ({**c, "_t": c["at"]} for c in self.cues), key=lambda c: c["_t"]
         )
@@ -518,7 +566,15 @@ def main() -> None:
     with ArduinoController(port) as board:
         runner = SceneRunner.from_file(scene_path, board)
         runner.debug = not quiet
-        runner.run()
+        reader = None
+        try:
+            if any(t.uid is not None for t in runner.triggers):
+                reader = RfidReader(default_rfid_port(exclude=port))
+                runner.reader = reader
+            runner.run()
+        finally:
+            if reader is not None:
+                reader.close()
 
 
 if __name__ == "__main__":

@@ -165,6 +165,55 @@ Edge detection requires a real transition: if a button is already held at the
 target level when the wait/trigger arms, it must be released and pressed again —
 a stuck button will not fire repeatedly.
 
+### RFID cards as triggers
+
+A trigger can watch for an RFID tag instead of a button. Give it a `uid`
+instead of a `pin`; it fires when a tag with that UID is presented to the
+reader (after being absent or different, so a tag left on the reader fires
+once, not every tick).
+
+```yaml
+triggers:
+  - name: unlock
+    uid: "45 00 A2 B3 C4" # tag UID; spaces, colons and 0x are ignored
+    once: false # fire on every scan; true = only the first
+    do:
+      - { at: 0, action: on, pin: 12 }
+      - { at: 0, action: audio, file: chime.wav }
+```
+
+RFID needs a **second Arduino** dedicated to the reader — the Firmata board
+that drives LEDs/servos keeps its serial port busy with Firmata traffic. Flash
+the second board with `rfid_reader/rfid_reader.ino` (no library needed). It
+prints each scanned UID over USB serial; the runner reads that port
+automatically whenever a scene has `uid` triggers.
+
+The reader is an **Innovations ID-12/ID-12LA**: internal antenna, TTL serial
+output, and it reads **125 kHz EM4100-type tags only** — 13.56 MHz MIFARE
+cards are invisible to it. The module has 2 mm pin pitch, so it does not fit a
+standard breadboard: use an ID-xx breakout board or solder wires directly.
+
+Wiring, ID-12 → the reader Arduino Uno:
+
+| ID-12 pin | Function  | Uno pin                  |
+| --------- | --------- | ------------------------ |
+| 1         | GND       | GND                      |
+| 7         | FS        | GND (ASCII output mode)  |
+| 2         | RES       | 5V (held high)           |
+| 11        | VCC       | 5V (ID-12LA: 3.3V works) |
+| 9         | D0 (data) | D8                       |
+
+Leave the other pins unconnected. Pin 7 must be tied to GND: floating or high
+selects a different output format (magnet emulation / Wiegand) and the sketch
+will see nothing.
+
+Find each tag's UID by scanning it with the reader's Serial Monitor open (or
+run the scene with logging on and watch the `TRIGGER` line). Set the reader's
+serial port with the `RFID_PORT` environment variable or `rfid_port` in
+`config.yaml`; `auto` picks the first Arduino-like device that is not the
+Firmata `port`. With two identical Unos, set both ports explicitly to avoid a
+mix-up.
+
 ## Wiring a button
 
 See the wiring notes for a 4-pin tactile button (pull-down, idle LOW / press
@@ -195,7 +244,8 @@ with ArduinoController("/dev/cu.usbmodem213301") as board:
 - `audio_player.py` — `AudioPlayer`: `play`, `is_playing`, `pause`, `resume`,
   `set_volume`, `stop`, plus `loop=True`.
 - `scene_runner.py` — `SceneRunner` and the YAML engine.
-- `config.py` — resolves the serial port.
+- `rfid_reader.py` — `RfidReader`: `current_uid`, reads the ID-12 board's serial.
+- `config.py` — resolves the serial ports (`default_port`, `default_rfid_port`).
 
 ## Example scenes
 
@@ -205,3 +255,4 @@ with ArduinoController("/dev/cu.usbmodem213301") as board:
 | `scene_button.yaml`      | `wait` — freeze until a button press.             |
 | `scene_interactive.yaml` | `triggers` — press to change the running scene.   |
 | `scene_video.yaml`       | `video` — fullscreen clips with loop and replace. |
+| `scenes/rfid.yaml`       | `uid` trigger — scan an RFID card to fire cues.   |

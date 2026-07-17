@@ -1,0 +1,19 @@
+name: RFID Trigger
+
+# Idle indicator until a tag is scanned. Needs the ID-12 reader board running
+# rfid_reader/rfid_reader.ino on a second Arduino. Put your tag's UID below
+# (as printed by the reader, e.g. 4500A2B3C4); spaces/colons/0x are ignored.
+
+cues:
+  - { at: 0, action: blink, pin: 13, interval: 0.5 }
+
+triggers:
+  - name: unlock
+    uid: "6A003E764C"
+    once: false # fire on every scan of this card
+    do:
+      - { at: 0, action: stop, pin: 13 }
+      - { at: 0, action: "on", pin: 12 }
+      - { at: 0, action: audio, file: sounds/516905__rakkarage__error.wav }
+      - { at: 2, action: "off", pin: 12 }
+      - { at: 2, action: blink, pin: 13, interval: 0.5 } # back to idle

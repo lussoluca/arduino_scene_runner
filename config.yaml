@@ -2,4 +2,9 @@
 # Override at runtime with the ARDUINO_PORT environment variable,
 # or by passing a port as the last CLI argument.
 # Set to "auto" to autodetect the first Arduino-like serial device.
-port: auto
+port: /dev/cu.usbmodem21101
+
+# Serial port of the ID-12 RFID reader board (only needed for scenes with
+# `uid` triggers). Override with the RFID_PORT environment variable.
+# "auto" picks the first Arduino-like device that is not the `port` above.
+rfid_port: /dev/cu.usbmodem21201

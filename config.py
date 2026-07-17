@@ -29,9 +29,13 @@ def load_config() -> dict:
     return {}
 
 
-def detect_port() -> str | None:
-    """Scan serial ports and return the first Arduino-like device, or None."""
-    candidates = list(list_ports.comports())
+def detect_port(exclude: str | None = None) -> str | None:
+    """Scan serial ports and return the first Arduino-like device, or None.
+
+    Pass ``exclude`` to skip an already-claimed device (e.g. the Firmata board)
+    so a second Arduino, such as the RFID reader, resolves to a different port.
+    """
+    candidates = [p for p in list_ports.comports() if p.device != exclude]
     # Prefer devices whose USB vendor ID is a known Arduino/clone chip.
     for p in candidates:
         if p.vid in _ARDUINO_VIDS:
@@ -53,3 +57,26 @@ def default_port() -> str:
     if configured and configured != "auto":
         return configured
     return detect_port() or _FALLBACK_PORT
+
+
+def default_rfid_port(exclude: str | None = None) -> str:
+    """Resolve the RFID reader board's port from env, config, then autodetect.
+
+    Precedence: RFID_PORT env var, ``rfid_port`` in config.yaml (unless
+    "auto"), then the first Arduino-like device other than ``exclude`` (the
+    Firmata board). Raises if none can be found, since there is no sensible
+    fallback for a second board.
+    """
+    env = os.environ.get("RFID_PORT")
+    if env:
+        return env
+    configured = load_config().get("rfid_port")
+    if configured and configured != "auto":
+        return configured
+    port = detect_port(exclude=exclude)
+    if not port:
+        raise RuntimeError(
+            "Could not find the RFID reader serial port. Set RFID_PORT or "
+            "rfid_port in config.yaml to the reader board's device."
+        )
+    return port
