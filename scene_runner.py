@@ -67,7 +67,10 @@ The scene stays alive while any trigger is still armed (a once:false trigger
 keeps it alive indefinitely, so add `end:` or a stop_all to finish).
 
 Run:
-    python scene_runner.py scene.yaml [PORT]
+    python scene_runner.py scene.yaml [PORT] [--quiet] [--simulate]
+
+With --simulate no hardware is needed: outputs are printed and inputs
+(buttons, RFID tags) are driven from the computer keyboard (see simulator.py).
 """
 
 from __future__ import annotations
@@ -75,6 +78,7 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass, field
+from typing import Protocol
 
 import yaml
 
@@ -83,6 +87,23 @@ from audio_player import AudioPlayer
 from config import default_port, default_rfid_port
 from rfid_reader import RfidReader, normalize_uid
 from video_player import VideoPlayer
+
+
+class Board(Protocol):
+    """What the engine needs from a board: real Arduino or simulator."""
+
+    def pin_on(self, pin: int) -> None: ...
+    def pin_off(self, pin: int) -> None: ...
+    def set_pin(self, pin: int, state: bool) -> None: ...
+    def set_servo(self, pin: int, angle: float) -> None: ...
+    def setup_input(self, pin: int) -> object: ...
+    def read_digital(self, pin: int) -> bool | None: ...
+
+
+class UidSource(Protocol):
+    """What the engine needs from an RFID reader: real ID-12 or simulator."""
+
+    def current_uid(self) -> str | None: ...
 
 TICK = 0.02  # seconds between engine updates
 
@@ -193,12 +214,12 @@ class Trigger:
 
 @dataclass
 class SceneRunner:
-    board: ArduinoController
+    board: Board
     cues: list[dict]
     end: float | None = None
     debug: bool = True
     triggers: list[Trigger] = field(default_factory=list)
-    reader: "RfidReader | None" = None  # ID-12 reader, for uid triggers
+    reader: UidSource | None = None  # ID-12 reader, for uid triggers
     _blinkers: dict[int, Blinker] = field(default_factory=dict)
     _morse: dict[int, Morse] = field(default_factory=dict)
     _sweeps: dict[int, Sweep] = field(default_factory=dict)
@@ -209,7 +230,7 @@ class SceneRunner:
     _pending: list[dict] = field(default_factory=list)  # cues with abs "_t"
 
     @classmethod
-    def from_file(cls, path: str, board: ArduinoController) -> "SceneRunner":
+    def from_file(cls, path: str, board: Board) -> "SceneRunner":
         with open(path) as fh:
             scene = yaml.safe_load(fh)
         cues = sorted(scene.get("cues", []), key=lambda c: c["at"])
@@ -556,11 +577,32 @@ class SceneRunner:
 
 
 def main() -> None:
-    argv = [a for a in sys.argv[1:] if a != "--quiet"]
+    flags = ("--quiet", "--simulate")
+    argv = [a for a in sys.argv[1:] if a not in flags]
     quiet = "--quiet" in sys.argv
+    simulate = "--simulate" in sys.argv
     if not argv:
-        sys.exit("usage: python scene_runner.py scene.yaml [PORT] [--quiet]")
+        sys.exit(
+            "usage: python scene_runner.py scene.yaml [PORT] [--quiet] [--simulate]"
+        )
     scene_path = argv[0]
+
+    if simulate:
+        from simulator import KeyboardSim, SimulatedBoard, SimulatedRfidReader
+
+        board = SimulatedBoard()
+        runner = SceneRunner.from_file(scene_path, board)
+        runner.debug = not quiet
+        sim_reader = None
+        if any(t.uid is not None for t in runner.triggers):
+            sim_reader = SimulatedRfidReader()
+            runner.reader = sim_reader
+        sim = KeyboardSim(board, sim_reader)
+        sim.bind_scene(runner)
+        with sim:
+            runner.run()
+        return
+
     port = argv[1] if len(argv) > 1 else default_port()
 
     with ArduinoController(port) as board:

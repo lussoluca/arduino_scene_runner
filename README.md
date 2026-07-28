@@ -32,6 +32,7 @@ the scene or change what it is doing, live.
 python scene_runner.py scene.yaml            # uses port from config.yaml
 python scene_runner.py scene.yaml /dev/cu.usbmodem213301
 python scene_runner.py scene.yaml --quiet    # silence the cue log
+python scene_runner.py scene.yaml --simulate # no hardware: keyboard drives inputs
 ```
 
 While it runs, each fired cue is logged with its scene-time:
@@ -108,6 +109,24 @@ python video_player.py --list-screens
 (each screen flashes black for about a second while probing). Screen selection
 is reliable with mpv; with ffplay only an index works, as a best-effort SDL
 hint. A `wait` pause freezes video along with audio and motion.
+
+## Simulator mode (no hardware)
+
+`--simulate` runs a scene with no Arduino attached. Pin and servo changes are
+printed to the terminal instead of driving hardware; audio and video play
+normally. Buttons and RFID tags are driven from the computer keyboard: the
+runner assigns one key per input pin (from `wait` cues and button triggers)
+and one per tag UID (from `uid` triggers), and prints the mapping at startup:
+
+```
+[sim] keys:
+[sim]   1 -> pin 2 HIGH (escalate)
+[sim]   2 -> tag 4500A2B3C4 (unlock)
+```
+
+Pressing a pin key pulses the pin to its active level for 0.4 s; pressing a
+tag key places the tag on the simulated reader for 1 s. Serial ports and
+`config.yaml` are not touched.
 
 ### When does a scene end?
 
@@ -245,6 +264,8 @@ with ArduinoController("/dev/cu.usbmodem213301") as board:
   `set_volume`, `stop`, plus `loop=True`.
 - `scene_runner.py` — `SceneRunner` and the YAML engine.
 - `rfid_reader.py` — `RfidReader`: `current_uid`, reads the ID-12 board's serial.
+- `simulator.py` — `SimulatedBoard`, `SimulatedRfidReader`, `KeyboardSim`:
+  the `--simulate` stand-ins (printed outputs, keyboard-driven inputs).
 - `config.py` — resolves the serial ports (`default_port`, `default_rfid_port`).
 
 ## Example scenes
