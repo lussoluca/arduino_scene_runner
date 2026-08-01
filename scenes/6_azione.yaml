@@ -1,0 +1,33 @@
+name: Azione
+
+cues: []
+
+triggers:
+  - name: start
+    pin: 2
+    to: low
+    once: true
+    do:
+      - { at: 0, action: video, file: video/fantasy.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
+      - { at: 0, action: audio, file: sounds/fantasy.mp3, loop: true, replace: true }
+  - name: film
+    uid: "6A003E82F0"
+    once: false
+    do:
+      - { at: 0, action: morse, pin: 9, message: "SONAR", unit: 0.2, loop: true }
+      - { at: 0, action: audio, file: sounds/sonar.mp3, loop: true, replace: true }
+      - { at: 0, action: video, file: video/sonar.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
+  - name: error
+    pin: 3
+    to: low
+    once: true
+    do:
+      - { at: 0, action: morse, pin: 9, message: "HOT", unit: 0.2, loop: true }
+      - { at: 0, action: video, file: video/spy.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
+      - { at: 0, action: audio, file: sounds/mission_impossibile.mp3, loop: true, replace: true }
+  - name: stop
+    pin: 8
+    to: low
+    once: true
+    do:
+      - { at: 0, action: stop_all }

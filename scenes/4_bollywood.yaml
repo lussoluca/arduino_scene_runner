@@ -1,0 +1,33 @@
+name: Bollywood
+
+cues: []
+
+triggers:
+  - name: start
+    pin: 2
+    to: low
+    once: true
+    do:
+      - { at: 0, action: audio, file: sounds/western.mp3, loop: true }
+      - { at: 0, action: video, file: video/tumbleweed.mp4, loop: true, volume: 0.8, backend: mpv, screen: Built-in Retina Display }
+  - name: film
+    uid: "6A003E82F0"
+    once: false
+    do:
+      - { at: 0, action: morse, pin: 9, message: "SAND", unit: 0.2, loop: true }
+      - { at: 0, action: audio, file: sounds/rumore.mp3, loop: true, replace: true }
+      - { at: 0, action: video, file: video/sabbia.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
+  - name: error
+    pin: 3
+    to: low
+    once: true
+    do:
+      - { at: 0, action: morse, pin: 9, message: "PHEEL", unit: 0.2, loop: true }
+      - { at: 0, action: audio, file: sounds/pheeal.mp3, loop: true, replace: true }
+      - { at: 0, action: video, file: video/giungla.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
+  - name: stop
+    pin: 8
+    to: low
+    once: true
+    do:
+      - { at: 0, action: stop_all }

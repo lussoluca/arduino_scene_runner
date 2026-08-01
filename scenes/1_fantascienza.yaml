@@ -1,0 +1,26 @@
+name: Fantascienza
+
+cues: []
+
+triggers:
+  - name: start
+    pin: 2
+    to: low
+    once: true
+    do:
+      - { at: 0, action: audio, file: sounds/errore.wav, loop: true }
+      - { at: 0, action: video, file: video/0_Glitch_Glitch_Effect_3840x2160.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
+  - name: error
+    pin: 3
+    to: low
+    once: true
+    do:
+      - { at: 0, action: morse, pin: 9, message: "SOS", unit: 0.2, loop: true }
+      - { at: 0, action: audio, file: sounds/allarme_fantascienza.mp3, loop: true, replace: true }
+      - { at: 0, action: video, file: video/0_Neon_Number_3840x2160.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
+  - name: stop
+    pin: 8
+    to: low
+    once: true
+    do:
+      - { at: 0, action: stop_all }

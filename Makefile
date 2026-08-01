@@ -1,5 +1,5 @@
 VENV := .venv
-SCENES := anime azione bollywood fantascienza giallo rfid western
+SCENES := 1_fantascienza 2_giallo 3_western 4_bollywood 5_fantasy 6_azione
 
 .PHONY: help $(SCENES)
 
