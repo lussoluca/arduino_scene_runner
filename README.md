@@ -97,18 +97,23 @@ installed — any format they decode works (MP4, MOV, MKV, …). Install one wit
 `brew install mpv` or `brew install ffmpeg`. Force a backend per cue with
 `backend: mpv`, or globally with the `VIDEO_BACKEND` environment variable.
 On a multi-monitor setup, `screen` picks the display for fullscreen: either an
-index (`screen: 1`, 0 = first) or a display name (`screen: DELL U2715H` — names
-as shown by `system_profiler SPDisplaysDataType`). A name survives display
-re-ordering, so prefer it for installations. List indices and names as mpv
-sees them with:
+index (`screen: 1`, 0 = first) or a display name (`screen: DELL U2715H`). A name
+survives display re-ordering, so prefer it for installations. List indices and
+names as mpv sees them with:
 
 ```bash
 python video_player.py --list-screens
 ```
 
-(each screen flashes black for about a second while probing). Screen selection
-is reliable with mpv; with ffplay only an index works, as a best-effort SDL
-hint. A `wait` pause freezes video along with audio and motion.
+(each screen flashes black for about a second while probing). Use those names
+verbatim — for an AirPlay or Sidecar display the name carries a suffix, so it is
+`screen: "Sidecar Display (AirPlay)"`, not `screen: Sidecar Display`. A name
+matching no connected display is not an error: mpv falls back to the current
+display, so a mistyped name or an unplugged screen sends the video elsewhere
+without warning.
+
+Screen selection is reliable with mpv; with ffplay only an index works, as a
+best-effort SDL hint. A `wait` pause freezes video along with audio and motion.
 
 ## Simulator mode (no hardware)
 

@@ -1,9 +1,8 @@
 name: Fantascienza
 
 cues:
-  - { at: 0, action: blink, pin: 13, interval: 0.4 }
-  - { at: 0, action: audio, file: /Users/lussoluca/Sites/Personal/vdb2026/sounds/516905__rakkarage__error.wav, loop: true }
-  - { at: 0, action: video, file: video/0_Glitch_Glitch_Effect_3840x2160.mp4, loop: true, volume: 0.8, backend=mpv, screen: Built-in Retina Display }
+  - { at: 0, action: audio, file: sounds/516905__rakkarage__error.wav, loop: true }
+  - { at: 0, action: video, file: video/0_Glitch_Glitch_Effect_3840x2160.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
 
 triggers:
   - name: error
@@ -11,10 +10,9 @@ triggers:
     to: low
     once: true
     do:
-      - { at: 0, action: stop_audio }
       - { at: 0, action: morse, pin: 9, message: "SOS", unit: 0.2, loop: true }
-      - { at: 0, action: audio, file: sounds/voice-changer-260729-195737.mp3, loop: true }
-      - { at: 0, action: video, file: video/0_Neon_Number_3840x2160.mp4, loop: true, volume: 0.8, backend=mpv, screen: Built-in Retina Display }
+      - { at: 0, action: audio, file: sounds/allarme_fantascienza.mp3, loop: true, replace: true }
+      - { at: 0, action: video, file: video/0_Neon_Number_3840x2160.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
   - name: stop
     pin: 8
     to: low

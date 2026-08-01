@@ -15,9 +15,14 @@ Pass `backend="mpv"` or `backend="ffplay"` to force one, or set the
 VIDEO_BACKEND environment variable.
 
 Pass `screen=N` (index, 0 = first) or `screen="DELL U2715H"` (display
-name, as shown by `system_profiler SPDisplaysDataType`) to pick the
-display for fullscreen. Reliable with mpv; with ffplay only an integer
-index is supported, as an SDL hint that some builds ignore.
+name, as reported by `--list-screens`) to pick the display for
+fullscreen. Reliable with mpv; with ffplay only an integer index is
+supported, as an SDL hint that some builds ignore.
+
+A name that matches no connected display is not an error: mpv silently
+falls back to whichever display is current. Names must match what
+`--list-screens` prints, which for an AirPlay/Sidecar display includes
+the suffix ("Sidecar Display (AirPlay)", not "Sidecar Display").
 
 Example:
     from video_player import VideoPlayer
@@ -69,6 +74,10 @@ def _probe_screen(index: int) -> str:
         [
             "mpv",
             "--fs",
+            # Same placement pinning as playback, so the probe reports the
+            # display the index really maps to and not one it drifted to.
+            "--no-native-fs",
+            f"--screen={index}",
             f"--fs-screen={index}",
             "--no-input-default-bindings",
             f"--input-ipc-server={sock_path}",
@@ -171,14 +180,30 @@ class VideoPlayer:
                 "--no-terminal",
                 "--really-quiet",
                 "--no-input-default-bindings",
+                # Bare picture: no on-screen controller (the seek bar that
+                # pops up on mouse movement), no OSD text, no mouse cursor.
+                "--no-osc",
+                "--osd-level=0",
+                "--cursor-autohide=always",
                 f"--volume={vol}",
             ]
             if self.loop:
                 cmd.append("--loop-file=inf")
+            # --fs-screen* alone is unreliable on macOS: the window is
+            # created on the target display, then the native-fullscreen
+            # transition can migrate it to the main display (observed on
+            # ~50% of launches onto an AirPlay/Sidecar display). Pinning the
+            # initial window placement with --screen* and skipping native
+            # fullscreen (no Space, no animation to race with) makes it land
+            # on the requested display every time.
             if isinstance(self.screen, int):
-                cmd.append(f"--fs-screen={self.screen}")
+                cmd += ["--no-native-fs",
+                        f"--screen={self.screen}",
+                        f"--fs-screen={self.screen}"]
             elif isinstance(self.screen, str):
-                cmd.append(f"--fs-screen-name={self.screen}")
+                cmd += ["--no-native-fs",
+                        f"--screen-name={self.screen}",
+                        f"--fs-screen-name={self.screen}"]
         else:
             cmd = [
                 "ffplay",
