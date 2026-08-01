@@ -8,7 +8,7 @@ triggers:
     to: low
     once: true
     do:
-      - { at: 0, action: video, file: video/bollywood.mp4, loop: true, volume: 0.8, backend: mpv, screen: Built-in Retina Display }
+      - { at: 0, action: video, file: video/bollywood.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
   - name: film
     uid: "6A003E82F0"
     once: false

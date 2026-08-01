@@ -9,7 +9,7 @@ triggers:
     once: true
     do:
       - { at: 0, action: audio, file: sounds/western.mp3, loop: true }
-      - { at: 0, action: video, file: video/tumbleweed.mp4, loop: true, volume: 0.8, backend: mpv, screen: Built-in Retina Display }
+      - { at: 0, action: video, file: video/tumbleweed.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
   - name: film
     uid: "6A003E82F0"
     once: false
@@ -24,7 +24,7 @@ triggers:
     do:
       - { at: 0, action: morse, pin: 9, message: "PHEEL", unit: 0.2, loop: true }
       - { at: 0, action: audio, file: sounds/pheeal.mp3, loop: true, replace: true }
-      - { at: 0, action: video, file: video/giungla.mp4, loop: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
+      - { at: 0, action: video, file: video/giungla.mp4, loop: true, replace: true, volume: 0.8, backend: mpv, screen: "Sidecar Display (AirPlay)" }
   - name: stop
     pin: 8
     to: low
